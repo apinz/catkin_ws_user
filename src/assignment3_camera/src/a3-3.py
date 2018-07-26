@@ -30,11 +30,11 @@ class image_converter:
     
     #bi_gray
     bi_gray_max = 255
-    bi_gray_min = 245
+    bi_gray_min = 248
     ret, thresh_img = cv2.threshold(gray, bi_gray_min, bi_gray_max, cv2.THRESH_BINARY)
 
-    cv2.imshow("Image window", gray)
-    #~ cv2.imwrite('grayscale.png', gray)
+    cv2.imshow("Image window", thresh_img)
+    cv2.imwrite('bw-dots.png', thresh_img)
     cv2.waitKey(3)
     
     try:
