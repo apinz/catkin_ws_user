@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import numpy as np 
 import roslib
 import sys
 import rospy
@@ -28,17 +29,23 @@ class image_converter:
     #make it gray
     gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
     
-    #bi_gray
-    bi_gray_max = 255
-    bi_gray_min = 245
-    ret, thresh_img = cv2.threshold(gray, bi_gray_min, bi_gray_max, cv2.THRESH_BINARY)
-
+    dot_color = 255
+    threshold = 248
+    ret, thresh_img = cv2.threshold(gray, threshold, dot_color, cv2.THRESH_BINARY)
+    
+    dots_x_pos = []
+    dots_y_pos = []
     for x in range(thresh_img.shape[0]):
         for y in range(thresh_img.shape[1]):
-            #TODO: find white points
+            if(thresh_img[x][y] == dot_color):
+                dots_x_pos.append(x)
+                dots_y_pos.append(y)
+    dots_xy = zip(dots_x_pos , dots_y_pos)
+    dot_array = np.array(dots_xy)
+    print(dot_array)
 
-    cv2.imshow("Image window", gray)
-    #~ cv2.imwrite('grayscale.png', gray)
+    cv2.imshow("Image window", thresh_img)
+    cv2.imwrite('bw-dots.png', thresh_img)
     cv2.waitKey(3)
     
     try:
