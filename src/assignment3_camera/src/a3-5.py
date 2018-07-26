@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import numpy as np 
 import roslib
 import sys
 import rospy
@@ -9,6 +10,20 @@ from geometry_msgs.msg import Point
 from geometry_msgs.msg import Quaternion
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
+
+# matrix for the intrinsic parameters
+fx = 614.1699
+fy = 614.9002
+cx = 329.9491
+cy = 237.2788
+intrinsic = np.matrix([[fx,0,cx],[0,fy,cy],[0,0,1]])
+
+# vector for the distortion parameters
+k1 = 0.1115
+k2 = -0.1089
+t1 = 0
+t2 = 0
+distortion = np.array([k1,k2,t1,t2])
 
 class image_converter:
 
@@ -28,15 +43,21 @@ class image_converter:
     #make it gray
     gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
     
-    #bi_gray
-    bi_gray_max = 255
-    bi_gray_min = 245
-    ret, thresh_img = cv2.threshold(gray, bi_gray_min, bi_gray_max, cv2.THRESH_BINARY)
+    dot_color = 255
+    threshold = 248
+    ret, thresh_img = cv2.threshold(gray, threshold, dot_color, cv2.THRESH_BINARY)
+    
+    dots_x_pos = []
+    dots_y_pos = []
+    for x in range(thresh_img.shape[0]):
+        for y in range(thresh_img.shape[1]):
+            if(thresh_img[x][y] == dot_color):
+                dots_x_pos.append(x)
+                dots_y_pos.append(y)
+    dots_xy = zip(dots_x_pos , dots_y_pos)
 
-    #TODO: Compute the extrinsic parameters
-
-    cv2.imshow("Image window", gray)
-    #~ cv2.imwrite('grayscale.png', gray)
+    cv2.imshow("Image window", thresh_img)
+    cv2.imwrite('bw-dots.png', thresh_img)
     cv2.waitKey(3)
     
     try:
