@@ -8,11 +8,10 @@ from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import LaserScan
 
 MAX_RANGE = 8
-MIN_RANGE = 0.15
 GRID_RESOLUTION = 0.05
 GRID_WIDTH = int(MAX_RANGE / GRID_RESOLUTION)
 GRID_HEIGHT = GRID_WIDTH
-BUFFER_SIZE = 1 * 360
+BUFFER_SIZE = 2 * 360
 
 # set all values to "FREE"
 def resetGrid():
@@ -43,7 +42,7 @@ def scanCallback(scan_msg):
     
     for i in range(0, len(scan_msg.ranges)):
         if(scan_msg.ranges[i] >= scan_msg.range_min and scan_msg.ranges[i] <= scan_msg.range_max):
-            occupied_cells.append(np.array([scan_msg.ranges[i] * np.cos(i), scan_msg.ranges[i] * np.sin(i)]))
+            occupied_cells.append(np.array([scan_msg.ranges[i] * np.cos(np.radians(i)), scan_msg.ranges[i] * np.sin(np.radians(i))]))
     
     for i in occupied_cells:
         setCell(i[0],i[1])
