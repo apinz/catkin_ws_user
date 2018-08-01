@@ -1,0 +1,14 @@
+<package>
+  <description brief="assignment6_PID_controller">
+
+     assignment6_PID_controller
+
+  </description>
+  <author>Aljoscha</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/assignment6_PID_controller</url>
+
+</package>
+
+
