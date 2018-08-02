@@ -3,10 +3,13 @@ import numpy as np
 import roslib
 import sys
 import rospy
+import tf
 from std_msgs.msg import Int16
 from std_msgs.msg import UInt8
 from std_msgs.msg import Float32
 from std_msgs.msg import Float64
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Pose
 
 USE_ROS_PID_CONTROLLER = 0
 TEST_ARRAY_LENGTH = 2
@@ -16,14 +19,14 @@ SPEED_RPM = 200
 MAX_ANGLE_RIGHT = 0
 ANGLE_STRAIGHT = 93
 MAX_ANGLE_LEFT = 180
-SETPOINT = -2.5
+SETPOINT = 3.0
 LOOP_FREQ = 10
 INITIAL_ERROR = 0.0
-KP = 5.0
-KI = 0.05
-KD = 0.1
-UPPER_LIMIT = 10
-LOWER_LIMIT = -10
+KP = 60.0
+KI = 1.5
+KD = 0.0
+KI_UPPER_LIMIT = 10
+KI_LOWER_LIMIT = -10
 
 # to set speed manually: rostopic pub manual_control/steering std_msgs/Int16 '{data: 180}'
 
@@ -34,7 +37,8 @@ class PID_Controller:
         self.previous_error = 0.0
         self.integral = 0.0
         self.derivative = 0.0
-        self.yaw_sub = rospy.Subscriber("/AljoschaTim/yaw", Float32, self.yawCallback, queue_size=1)
+        #~ self.local_yaw_sub = rospy.Subscriber("/AljoschaTim/yaw", Float32, self.pidCallback, queue_size=1)
+        self.odometry_sub = rospy.Subscriber("/localization/odom/1", Odometry, self.pidCallback, queue_size = 1)
         self.steering_sub = rospy.Subscriber("/steering_setpoint", Float32, self.steeringCallback, queue_size=1)
         self.steering_pub = rospy.Publisher("AljoschaTim/steering", UInt8, queue_size=1)
         self.dt = LOOP_FREQ
@@ -46,21 +50,39 @@ class PID_Controller:
         self.Kd = KD
     
     # current state = current yaw
-    def yawCallback(self, yaw):
+    def pidCallback(self, data):
+        global global_loc_yaw
+        
+        # Calculate yaw from orientation obtained by camera on the ceiling
+        #~ if(DEBUG):
+            #~ print("Position:\n" + str(data.pose.pose.position) + "\n")
+            #~ print("Orientation:\n" + str(data.pose.pose.orientation) + "\n\n")
+        orientation = data.pose.pose.orientation
+        quaternion = (orientation.x, orientation.y, orientation.z, orientation.w)
+        euler = tf.transformations.euler_from_quaternion(quaternion)
+        global_loc_yaw = euler[2]
+        
         dt = 1.0 / self.dt # T = 1/f
-        self.error = float(self.setpoint) - float(yaw.data)
+        self.error = float(self.setpoint) - float(global_loc_yaw)
         self.integral = float(self.integral) + float(self.error) * dt
-        if(self.integral > UPPER_LIMIT):
-            self.integral = UPPER_LIMIT
-        elif(self.integral < LOWER_LIMIT):
-            self.integral = LOWER_LIMIT
+        if(self.integral > KI_UPPER_LIMIT):
+            self.integral = KI_UPPER_LIMIT
+        elif(self.integral < KI_LOWER_LIMIT):
+            self.integral = KI_LOWER_LIMIT
         self.derivative = (self.error - self.previous_error) / dt
         self.previous_error = self.error
-        control = UInt8(int(self.Kp * self.error + self.Ki * self.integral + self.Kd * self.derivative + ANGLE_STRAIGHT))
-        self.steering_pub.publish(control)
+        control = self.Kp * self.error + self.Ki * self.integral + self.Kd * self.derivative + ANGLE_STRAIGHT
+        if(control >= MAX_ANGLE_LEFT):
+            steering = UInt8(int(MAX_ANGLE_LEFT))
+        elif(control <= MAX_ANGLE_RIGHT):
+            steering = UInt8(int(MAX_ANGLE_RIGHT))
+        else:
+            steering = UInt8(int(control))
+        print("Steering: " + str(steering) + "\n")
+        self.steering_pub.publish(steering)
         
         if(DEBUG):
-            print("Current yaw: " + str(yaw.data))
+            print("Current yaw: " + str(global_loc_yaw))
             print("Setpoint: " + str(self.setpoint))
             print("Error: " + str(self.error))
             print("Previous Error: " + str(self.previous_error))
@@ -72,7 +94,7 @@ class PID_Controller:
     
     # /steering_setpoint has to be the desired angle
     def steeringCallback(self, data):
-        print("Set steering setpoint to: " + str(data))
+        #~ print("Set steering setpoint to: " + str(data))
         new_setpoint = float(data.data)
         self.setpoint = new_setpoint
 
@@ -82,7 +104,7 @@ class SetpointStateNode:
         self.setpoint_pub = rospy.Publisher("/setpoint", Float64, queue_size=1)
         self.state_pub = rospy.Publisher("/state", Float64, queue_size=1)
         self.control_sub = rospy.Subscriber("/control_effort", Float64, self.controlCallback, queue_size=1)
-        self.yaw_sub = rospy.Subscriber("/AljoschaTim/yaw", Float32, self.yawCallback, queue_size=1)
+        self.local_yaw_sub = rospy.Subscriber("/AljoschaTim/yaw", Float32, self.yawCallback, queue_size=1)
 
     def yawCallback(self, data):
         self.state_pub.publish(Float64(data.data))
@@ -102,20 +124,16 @@ def drive_test():
     while True:
         steering_pub.publish(test_angles[idx])
         idx = (idx + 1) % TEST_ARRAY_LENGTH
-        rospy.sleep(5.)
+        rospy.sleep(15.)
 
-def main(args):
-    print("Running\n")    
-    rospy.init_node('PID_setpoint_state_node', anonymous=True)
+# main
+rospy.init_node('PID_setpoint_state_node', anonymous=True)
+global_loc_yaw = 0
     
-    if(USE_ROS_PID_CONTROLLER):
-        ssn = SetpointStateNode()        
-    else:
-        pid_controller = PID_Controller()
-        drive_test()
+if(USE_ROS_PID_CONTROLLER):
+    ssn = SetpointStateNode()        
+else:
+    pid_controller = PID_Controller()
+    #~ drive_test()
                 
-    rospy.spin()
-
-if __name__ == '__main__':
-    main(sys.argv)
-
+rospy.spin()
