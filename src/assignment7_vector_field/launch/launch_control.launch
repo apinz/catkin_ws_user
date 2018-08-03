@@ -9,5 +9,5 @@
     	<node machine="Steve-7" name="master_sync" pkg="master_sync_fkie" 
         type="master_sync" output="screen">
 	</node>
-    	<node name="controller_py" pkg="assignment7_vector_field" type="control.py"/>
+    	<node name="controller_py" pkg="assignment7_vector_field" type="control_2.py"/>
 </launch> 

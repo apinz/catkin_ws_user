@@ -81,8 +81,8 @@ class PID_Controller:
         elif(self.integral < KI_LOWER_LIMIT):
             self.integral = KI_LOWER_LIMIT
         
+        # correct sudden huge errors
         self.derivative = (self.error - self.previous_error) / dt
-        
         self.previous_error = self.error
         
         control = YAW_TO_STEERING_FACTOR * (self.Kp * self.error + self.Ki * self.integral + self.Kd * self.derivative) + ANGLE_STRAIGHT
