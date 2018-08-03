@@ -4,6 +4,7 @@ import roslib
 import sys
 import rospy
 import tf
+from collections import deque
 from std_msgs.msg import Int16
 from std_msgs.msg import UInt8
 from std_msgs.msg import Float32
@@ -17,14 +18,16 @@ DEBUG = 1
 
 SPEED_RPM = 200
 MAX_ANGLE_RIGHT = 0
-ANGLE_STRAIGHT = 93
+ANGLE_STRAIGHT = 90
 MAX_ANGLE_LEFT = 180
 SETPOINT = 3.0
 LOOP_FREQ = 10
 INITIAL_ERROR = 0.0
-KP = 60.0
-KI = 1.5
-KD = 0.0
+YAW_TO_STEERING_FACTOR = 180.0 / np.pi
+KP = 1.1
+KI = 0.1
+KD = 0.05
+ERROR_QUEUE_SIZE = 20
 KI_UPPER_LIMIT = 10
 KI_LOWER_LIMIT = -10
 
@@ -41,6 +44,7 @@ class PID_Controller:
         self.odometry_sub = rospy.Subscriber("/localization/odom/1", Odometry, self.pidCallback, queue_size = 1)
         self.steering_sub = rospy.Subscriber("/steering_setpoint", Float32, self.steeringCallback, queue_size=1)
         self.steering_pub = rospy.Publisher("AljoschaTim/steering", UInt8, queue_size=1)
+        self.error_queue = deque(np.zeros(ERROR_QUEUE_SIZE), maxlen = ERROR_QUEUE_SIZE)
         self.dt = LOOP_FREQ
         self.rate = rospy.Rate(self.dt)
         self.setpoint = SETPOINT
@@ -54,31 +58,41 @@ class PID_Controller:
         global global_loc_yaw
         
         # Calculate yaw from orientation obtained by camera on the ceiling
-        #~ if(DEBUG):
-            #~ print("Position:\n" + str(data.pose.pose.position) + "\n")
-            #~ print("Orientation:\n" + str(data.pose.pose.orientation) + "\n\n")
         orientation = data.pose.pose.orientation
         quaternion = (orientation.x, orientation.y, orientation.z, orientation.w)
         euler = tf.transformations.euler_from_quaternion(quaternion)
         global_loc_yaw = euler[2]
         
         dt = 1.0 / self.dt # T = 1/f
+        
         self.error = float(self.setpoint) - float(global_loc_yaw)
-        self.integral = float(self.integral) + float(self.error) * dt
+        if(self.error > np.pi):
+            self.error = self.error - 2*np.pi
+        if(self.error < -np.pi):
+            self.error = self.error + 2*np.pi
+        
+        # limit error history
+        self.error_queue.append(self.error * dt)
+        self.integral = 0
+        for e in self.error_queue:
+            self.integral += e
         if(self.integral > KI_UPPER_LIMIT):
             self.integral = KI_UPPER_LIMIT
         elif(self.integral < KI_LOWER_LIMIT):
             self.integral = KI_LOWER_LIMIT
+        
         self.derivative = (self.error - self.previous_error) / dt
+        
         self.previous_error = self.error
-        control = self.Kp * self.error + self.Ki * self.integral + self.Kd * self.derivative + ANGLE_STRAIGHT
+        
+        control = YAW_TO_STEERING_FACTOR * (self.Kp * self.error + self.Ki * self.integral + self.Kd * self.derivative) + ANGLE_STRAIGHT
         if(control >= MAX_ANGLE_LEFT):
             steering = UInt8(int(MAX_ANGLE_LEFT))
         elif(control <= MAX_ANGLE_RIGHT):
             steering = UInt8(int(MAX_ANGLE_RIGHT))
         else:
             steering = UInt8(int(control))
-        print("Steering: " + str(steering) + "\n")
+        
         self.steering_pub.publish(steering)
         
         if(DEBUG):
@@ -89,6 +103,7 @@ class PID_Controller:
             print("Integral: " + str(self.integral))
             print("Derivative: " + str(self.derivative))
             print("Control: " + str(control) + "\n")
+            print("Steering: " + str(steering) + "\n")
         
         self.rate.sleep()
     
