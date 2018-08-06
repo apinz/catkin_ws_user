@@ -29,7 +29,7 @@ class PathReader:
         self.poses = read_map(trajectory_map)
 
         # Also publish a Path data structure to visualize the path in rviz
-        self.path_publisher = rospy.Publisher("/assignment7/path", Path, queue_size=1, latch=True)
+        self.path_publisher = rospy.Publisher("/assignment7/path2", Path, queue_size=1, latch=True)
 
         # set up the Path data structure
         self.path = Path()
@@ -45,8 +45,8 @@ class PathReader:
 
 
 def main():
-    rospy.init_node('assignment7_trajectory')
-    path_reader = PathReader('sample_map_origin_map_1.txt')  # constructor creates publishers / subscribers
+    rospy.init_node('assignment7_trajectory2')
+    path_reader = PathReader('sample_map_origin_map.txt')  # constructor creates publishers / subscribers
     rate = rospy.Rate(1)
     while not rospy.is_shutdown():
         path_reader.publish()
