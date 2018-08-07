@@ -28,7 +28,7 @@ WHEELBASE = 0.28 # 28cm
 KP = 3.6
 KI = 1.8
 KD = 0.1
-SPEED = 320
+SPEED = 280
 
 # MORE INTEGRAL SETTINGS
 ERROR_QUEUE_SIZE = 3
@@ -36,13 +36,19 @@ KI_UPPER_LIMIT = 15
 KI_LOWER_LIMIT = -15
 
 #OBSTACLE DETECTION SETTINGS
-#VALUES FROM CAMERA INTO CM DISTANCE
+#THRESHOLD VALUES FROM CAMERA INTO CM DISTANCE FROM THE CAR
 #500 => 30 cm, 700 => 50cm
-THRESHOLD = 900
+
+THRESHOLD = 1000
+#Um welchen Faktor die Threshold gesenkt werden soll, wenn zu viel gesteert wird 
+STEERING_THRESH_MINIFIER = 0.4
+#Welche Gradtoleranz (+, -) es beim Steering gibt, bis die Threshold vom steering gesenkt wird
+STEERING_TOLERANCE_UNTIL_MINIFY = 40
+
 MIN_COUNTER = 400
-STEERING_ADD = 0.25
+STEERING_ADD = 0.4
 #delay until the next lane swap can occur
-DONT_SWAP_LANE_DELAY = 1500
+DONT_SWAP_LANE_DELAY = 1600
 START_SEARCH_HEIGHT = 215
 END_SEARCH_HEIGHT = 245
 START_SEARCH_WIDTH = 305
@@ -55,6 +61,9 @@ class ForceController:
 	self.waitWithSwapLaneUntil = 0
 	self.bridge = CvBridge()
 	self.steeringPush = 0
+	self.threshold = THRESHOLD
+	self.steeringUntilMinifyMax = 90 + STEERING_TOLERANCE_UNTIL_MINIFY
+	self.steeringUntilMinifyMin = 90 - STEERING_TOLERANCE_UNTIL_MINIFY
 	
         self.previous_error = 0.0
         self.integral = 0.0
@@ -191,7 +200,11 @@ class ForceController:
             steering = UInt8(int(MAX_ANGLE_RIGHT))
         else:
             steering = UInt8(int(steering))
-        
+	#Wenn das Steering eine gewisse Schwelle erreicht, setzen wir unser THRESHOLD runter, damit wenn das Auto in der inneren Lane um die Kurve faehrt, keine Objekte der ausseren Lane erkennt und so in diese hereinfaehrt. Außerdem koennen wir so einen Hoeheren Threshold benutzen um Objekte in der Geraden von weiter aus zu erkennen. 
+	if steering >= steeringUntilMinifyMax or steering <= steeringUntilMinifyMin:
+	    self.threshold = THRESHOLD * STEERING_THRESH_MINIFIER
+	else:
+            self.threshold = THRESHOLD
         self.last_yaw = yaw
         self.time_old = self.time_new
         self.init_time = 1
@@ -212,7 +225,7 @@ class ForceController:
 	counter = 0
 	for heightArray in x[START_SEARCH_HEIGHT:END_SEARCH_HEIGHT]:
 		for y in heightArray[START_SEARCH_WIDTH:END_SEARCH_WIDTH]:
-			if y != 0 and y <= THRESHOLD:
+			if y != 0 and y <= self.threshold:
 				counter += 1
 			if counter >= MIN_COUNTER:
 				self.lane_swap()
