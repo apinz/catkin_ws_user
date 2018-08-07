@@ -4,6 +4,7 @@ import rospy
 import tf
 import roslib
 import sys
+import math
 from collections import deque
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped, PointStamped
@@ -13,6 +14,9 @@ from std_msgs.msg import Float32
 from std_msgs.msg import Float64
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Point
+from visualization_msgs.msg import Marker
+
+#http://docs.ros.org/api/visualization_msgs/html/msg/ImageMarker.html
 
 MAX_ANGLE_RIGHT = 0
 ANGLE_STRAIGHT = 90
@@ -53,7 +57,9 @@ class ForceController:
         self.init_time = 0
         self.last_yaw = 0.0
         self.matrix = np.load(PATH + "matrix100cm_lane1.npy")
-        self.lane = 1 
+        self.lane = 1
+        self.turning_circle = 6.0
+        self.truning_circle_pub = rospy.Publisher("AljoschaTim/turning_circle", Marker, queue_size=1, latch=True)
         self.steering_pub = rospy.Publisher("AljoschaTim/steering", UInt8, queue_size=1)
         self.speed_pub = rospy.Publisher("AljoschaTim/speed", Int16, queue_size = 10, latch=True)
         self.lane_sub = rospy.Subscriber("/lane_change", Int16, self.lane_callback, queue_size = 1)
@@ -164,6 +170,29 @@ class ForceController:
             steering = UInt8(int(MAX_ANGLE_RIGHT))
         else:
             steering = UInt8(int(steering))
+        
+        # turning circle data for visualization in rviz
+        deg_steering = float(steering.data - 90)
+        self.turning_circle = 2.0 * (WHEELBASE / math.sin(math.radians(deg_steering)))
+        marker = Marker()
+        marker.header.frame_id = "map"
+        marker.type = Marker.CYLINDER
+        marker.action = Marker.ADD
+        marker.pose.position.x = x;
+        marker.pose.position.y = y;
+        marker.pose.position.z = 0;
+        marker.pose.orientation.x = orientation_q.x;
+        marker.pose.orientation.y = orientation_q.y;
+        marker.pose.orientation.z = orientation_q.z;
+        marker.pose.orientation.w = orientation_q.w;
+        marker.scale.x = self.turning_circle;
+        marker.scale.y = self.turning_circle;
+        marker.scale.z = 0.1;
+        marker.color.a = 0.5;
+        marker.color.r = 1.0;
+        marker.color.g = 0.1;
+        marker.color.b = 0.1;
+        self.truning_circle_pub.publish(marker)
         
         self.last_yaw = yaw
         self.time_old = self.time_new
