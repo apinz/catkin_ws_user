@@ -4,6 +4,7 @@ import rospy
 import tf
 import roslib
 import sys
+import time
 from collections import deque
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped, PointStamped
@@ -11,6 +12,8 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from std_msgs.msg import Int16, UInt8
 from std_msgs.msg import Float32
 from std_msgs.msg import Float64
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Point
 
@@ -25,7 +28,7 @@ WHEELBASE = 0.28 # 28cm
 KP = 3.6
 KI = 1.8
 KD = 0.1
-SPEED = 350
+SPEED = 320
 
 # MORE INTEGRAL SETTINGS
 ERROR_QUEUE_SIZE = 3
@@ -35,24 +38,15 @@ KI_LOWER_LIMIT = -15
 #OBSTACLE DETECTION SETTINGS
 #VALUES FROM CAMERA INTO CM DISTANCE
 #500 => 30 cm, 700 => 50cm
-THRESHOLD = 1000
-MIN_COUNTER = 6000
-STEERING_PUSH = 1.5
-DONT_SWAP_LANE_DELAY = 4000
-#middleX = 320
-#middleY = 230
-#upperLeftX = 160
-#upperLeftY = 115
-#upperRightX = 480
-#upperRightY = 345
-#lowerLeftX = 160
-#lowerLeftY = 345
-#lowerRightX = 480
-#lowerRightY = 345
-START_SEARCH_HEIGHT = 185
+THRESHOLD = 900
+MIN_COUNTER = 400
+STEERING_ADD = 0.25
+#delay until the next lane swap can occur
+DONT_SWAP_LANE_DELAY = 1500
+START_SEARCH_HEIGHT = 215
 END_SEARCH_HEIGHT = 245
-START_SEARCH_WIDTH = 175
-END_SEARCH_WIDTH = 365
+START_SEARCH_WIDTH = 305
+END_SEARCH_WIDTH = 335
 
 PATH = "/root/catkin_ws_user/src/assignment7_vector_field/src/"
 
@@ -60,7 +54,7 @@ class ForceController:
     def __init__(self):
 	self.waitWithSwapLaneUntil = 0
 	self.bridge = CvBridge()
-	self.steeringPush = 1
+	self.steeringPush = 0
 	
         self.previous_error = 0.0
         self.integral = 0.0
@@ -82,13 +76,12 @@ class ForceController:
         self.lane = 1 
         self.steering_pub = rospy.Publisher("AljoschaTim/steering", UInt8, queue_size=1)
         self.speed_pub = rospy.Publisher("AljoschaTim/speed", Int16, queue_size = 10, latch=True)
-        self.lane_sub = rospy.Subscriber("/lane_change", Int16, self.lane_callback, queue_size = 1)
         self.odometry_sub = rospy.Subscriber("/localization/odom/1", Odometry, self.odometry_callback, queue_size = 1)
-	self.subDepthImage = rospy.Subscriber("AljoschaTim/app/camera/depth/image_raw", Image, self.depthImageCallback, queue_size = 1)
+	self.subDepthImage = rospy.Subscriber("AljoschaTim/app/camera/depth/image_raw", Image, self.depthImageCallback, queue_size = 10)
         rospy.on_shutdown(self.shutdown) # on shutdown set speed to zero
 
-    def lane_callback(self, data):
-	self.steeringPush = STEERING_PUSH
+    def lane_swap(self):
+	self.steeringPush = STEERING_ADD
 	self.waitWithSwapLaneUntil = int(round(time.time() * 1000)) + DONT_SWAP_LANE_DELAY
         if (self.lane == 1):
             print("Switch to outer lane.")
@@ -185,7 +178,12 @@ class ForceController:
             if (f_y < 0):
                 control = np.pi / 2
             
-        steering = self.steeringPush control * YAW_TO_STEERING_FACTOR + ANGLE_STRAIGHT
+        steering = control * YAW_TO_STEERING_FACTOR + ANGLE_STRAIGHT
+
+	if steering > ANGLE_STRAIGHT:
+		steering = (1 + self.steeringPush) * steering
+	elif steering < ANGLE_STRAIGHT:
+		steering = (1 - self.steeringPush) * steering
         
         if(steering >= MAX_ANGLE_LEFT):
             steering = UInt8(int(MAX_ANGLE_LEFT))
@@ -202,13 +200,11 @@ class ForceController:
             self.steering_pub.publish(steering)
             self.speed_pub.publish(Int16(speed))
 
-    def depthImageCallback(self, depthData):
-	print("called")
-	
+    def depthImageCallback(self, depthData):	
 	if int(round(time.time() * 1000)) <= self.waitWithSwapLaneUntil:
 		return
 	else:
-		self.steeringPush = 1
+		self.steeringPush = 0
 	depthImage = self.bridge.imgmsg_to_cv2(depthData, "16UC1")
 	x = np.array(depthImage, dtype=np.uint16)
 	#depthArray ist eine Matrix mit [460][640] <==> [Hoehe][Breite] und Werten von 0 bis 360? stellvertretend fuer die Tiefe, die gefunden wurde. Die meisten Werte sind 0
@@ -219,7 +215,7 @@ class ForceController:
 			if y != 0 and y <= THRESHOLD:
 				counter += 1
 			if counter >= MIN_COUNTER:
-				self.lane_callback()
+				self.lane_swap()
 				return
 
     #ein Listener wir bei der init() erstellt, dieser called die shutdown Funktion, wenn das script beendet wird. 
