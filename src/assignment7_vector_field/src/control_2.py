@@ -20,11 +20,12 @@ MAX_ANGLE_LEFT = 180
 INITIAL_ERROR = 0.0
 YAW_TO_STEERING_FACTOR = 180.0 / np.pi
 MAX_SPEED = 1000
+WHEELBASE = 0.28 # 28cm
 
 KP = 3.6
 KI = 1.8
 KD = 0.1
-SPEED = 450
+SPEED = 350
 
 # MORE INTEGRAL SETTINGS
 ERROR_QUEUE_SIZE = 3
@@ -55,7 +56,6 @@ class ForceController:
         self.lane = 1 
         self.steering_pub = rospy.Publisher("AljoschaTim/steering", UInt8, queue_size=1)
         self.speed_pub = rospy.Publisher("AljoschaTim/speed", Int16, queue_size = 10, latch=True)
-        self.desired_pos_pub = rospy.Publisher("AljoschaTim/desired_pos", Point, queue_size = 1)
         self.lane_sub = rospy.Subscriber("/lane_change", Int16, self.lane_callback, queue_size = 1)
         self.odometry_sub = rospy.Subscriber("/localization/odom/1", Odometry, self.odometry_callback, queue_size = 1)
         rospy.on_shutdown(self.shutdown) # on shutdown set speed to zero
