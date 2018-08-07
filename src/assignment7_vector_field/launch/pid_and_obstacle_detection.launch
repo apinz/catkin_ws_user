@@ -1,0 +1,13 @@
+<launch>
+	<machine name="Steve-7" address="192.168.43.134" env-loader="~/catkin_ws_user/devel/env.sh" password="elfmeter" user="root">
+    	</machine>
+
+    	<node machine="Steve-7" name="master_discovery" pkg="master_discovery_fkie"
+        type="master_discovery" output="screen">
+    	</node>
+
+    	<node machine="Steve-7" name="master_sync" pkg="master_sync_fkie" 
+        type="master_sync" output="screen">
+	</node>
+    	<node name="pid_and_obstacle_detection" pkg="assignment7_vector_field" type="PID_and_obstacle_detection.py"/>
+</launch> 
