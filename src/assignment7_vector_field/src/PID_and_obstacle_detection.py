@@ -28,7 +28,7 @@ WHEELBASE = 0.28 # 28cm
 KP = 3.6
 KI = 1.8
 KD = 0.1
-SPEED = 320
+SPEED = 350
 
 # MORE INTEGRAL SETTINGS
 ERROR_QUEUE_SIZE = 3
@@ -40,9 +40,9 @@ KI_LOWER_LIMIT = -15
 #500 => 30 cm, 700 => 50cm
 THRESHOLD = 900
 MIN_COUNTER = 400
-STEERING_ADD = 0.25
+STEERING_PUSH = .3
 #delay until the next lane swap can occur
-DONT_SWAP_LANE_DELAY = 1500
+DONT_SWAP_LANE_DELAY = 1400
 START_SEARCH_HEIGHT = 215
 END_SEARCH_HEIGHT = 245
 START_SEARCH_WIDTH = 305
@@ -52,10 +52,9 @@ PATH = "/root/catkin_ws_user/src/assignment7_vector_field/src/"
 
 class ForceController:
     def __init__(self):
-	self.waitWithSwapLaneUntil = 0
-	self.bridge = CvBridge()
-	self.steeringPush = 0
-	
+        self.waitWithSwapLaneUntil = 0
+        self.bridge = CvBridge()
+        self.steeringPush = 0.0
         self.previous_error = 0.0
         self.integral = 0.0
         self.derivative = 0.0        
@@ -77,12 +76,12 @@ class ForceController:
         self.steering_pub = rospy.Publisher("AljoschaTim/steering", UInt8, queue_size=1)
         self.speed_pub = rospy.Publisher("AljoschaTim/speed", Int16, queue_size = 10, latch=True)
         self.odometry_sub = rospy.Subscriber("/localization/odom/1", Odometry, self.odometry_callback, queue_size = 1)
-	self.subDepthImage = rospy.Subscriber("AljoschaTim/app/camera/depth/image_raw", Image, self.depthImageCallback, queue_size = 10)
+        self.subDepthImage = rospy.Subscriber("AljoschaTim/app/camera/depth/image_raw", Image, self.depthImageCallback, queue_size = 10)
         rospy.on_shutdown(self.shutdown) # on shutdown set speed to zero
 
     def lane_swap(self):
-	self.steeringPush = STEERING_ADD
-	self.waitWithSwapLaneUntil = int(round(time.time() * 1000)) + DONT_SWAP_LANE_DELAY
+        self.steeringPush = STEERING_PUSH
+        self.waitWithSwapLaneUntil = int(round(time.time() * 1000)) + DONT_SWAP_LANE_DELAY
         if (self.lane == 1):
             print("Switch to outer lane.")
             self.lane = 2
@@ -201,25 +200,23 @@ class ForceController:
             self.speed_pub.publish(Int16(speed))
 
     def depthImageCallback(self, depthData):	
-	if int(round(time.time() * 1000)) <= self.waitWithSwapLaneUntil:
-		return
-	else:
-		self.steeringPush = 0
-	depthImage = self.bridge.imgmsg_to_cv2(depthData, "16UC1")
-	x = np.array(depthImage, dtype=np.uint16)
-	#depthArray ist eine Matrix mit [460][640] <==> [Hoehe][Breite] und Werten von 0 bis 360? stellvertretend fuer die Tiefe, die gefunden wurde. Die meisten Werte sind 0
-	#Loope durch die Hoehe
-	counter = 0
-	for heightArray in x[START_SEARCH_HEIGHT:END_SEARCH_HEIGHT]:
-		for y in heightArray[START_SEARCH_WIDTH:END_SEARCH_WIDTH]:
-			if y != 0 and y <= THRESHOLD:
-				counter += 1
-			if counter >= MIN_COUNTER:
-				self.lane_swap()
-				return
+        if int(round(time.time() * 1000)) <= self.waitWithSwapLaneUntil:
+            return
 
-    #ein Listener wir bei der init() erstellt, dieser called die shutdown Funktion, wenn das script beendet wird. 
-    #Setzt den Speed des autos auf 0
+        self.steeringPush = 0.0
+        depthImage = self.bridge.imgmsg_to_cv2(depthData, "16UC1")
+        x = np.array(depthImage, dtype=np.uint16)
+        print(str(x))
+        # depthArray dimension is [480][640] <==> [Hoehe][Breite]
+        counter = 0
+        for heightArray in x[START_SEARCH_HEIGHT:END_SEARCH_HEIGHT]:
+            for y in heightArray[START_SEARCH_WIDTH:END_SEARCH_WIDTH]:
+                if y != 0 and y <= THRESHOLD:
+                    counter += 1
+                if counter >= MIN_COUNTER:
+                    self.lane_swap()
+                    return
+
     def shutdown(self):
         print("shutdown!")
         self.shutdown_ = True

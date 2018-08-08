@@ -26,10 +26,16 @@ YAW_TO_STEERING_FACTOR = 180.0 / np.pi
 MAX_SPEED = 1000
 WHEELBASE = 0.28 # 28cm
 
-KP = 3.6
-KI = 1.8
+KP = 3.8
+KI = 1.9
 KD = 0.1
-SPEED = 350
+SPEED = 500
+
+# WORKS VERY WELL
+#~ KP = 3.6
+#~ KI = 1.8
+#~ KD = 0.1
+#~ SPEED = 520
 
 # MORE INTEGRAL SETTINGS
 ERROR_QUEUE_SIZE = 3
@@ -58,10 +64,15 @@ class ForceController:
         self.last_yaw = 0.0
         self.matrix = np.load(PATH + "matrix100cm_lane1.npy")
         self.lane = 1
-        self.turning_circle = 6.0
-        self.truning_circle_pub = rospy.Publisher("AljoschaTim/turning_circle", Marker, queue_size=1, latch=True)
+        #~ self.turning_circle = 6.0
+        #~ self.truning_circle_pub = rospy.Publisher("AljoschaTim/turning_circle", Marker, queue_size=1, latch=True)
         self.steering_pub = rospy.Publisher("AljoschaTim/steering", UInt8, queue_size=1)
         self.speed_pub = rospy.Publisher("AljoschaTim/speed", Int16, queue_size = 10, latch=True)
+        self.heading_pub = rospy.Publisher("AljoschaTim/heading", Float32, queue_size = 1, latch=True)
+        self.desired_yaw_pub = rospy.Publisher("AljoschaTim/desired_yaw", Float32, queue_size = 1, latch=True)
+        self.desired_yaw_pub_2 = rospy.Publisher("AljoschaTim/desired_yaw_2", Float32, queue_size = 1, latch=True)
+        self.desired_yaw_pub_3 = rospy.Publisher("AljoschaTim/desired_yaw_3", Float32, queue_size = 1, latch=True)
+        self.error_pub = rospy.Publisher("AljoschaTim/error", Float32, queue_size = 1, latch=True)
         self.lane_sub = rospy.Subscriber("/lane_change", Int16, self.lane_callback, queue_size = 1)
         self.odometry_sub = rospy.Subscriber("/localization/odom/1", Odometry, self.odometry_callback, queue_size = 1)
         rospy.on_shutdown(self.shutdown) # on shutdown set speed to zero
@@ -84,6 +95,7 @@ class ForceController:
         orientation_q = data.pose.pose.orientation
         orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
         (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
+        self.heading_pub.publish(Float32(yaw))
 
         x_index = np.int(x * self.resolution)
         y_index = np.int(y * self.resolution)
@@ -99,6 +111,9 @@ class ForceController:
             y_index = (self.map_size_y / self.resolution) - 1
 
         x3, y3 = self.matrix[x_index, y_index, :]
+        
+        self.desired_yaw_pub.publish(Float32(np.arctan2(y3, x3)))
+        
         f_x = np.cos(yaw) * x3 + np.sin(yaw) * y3
         f_y = -np.sin(yaw) * x3 + np.cos(yaw) * y3
         
@@ -108,6 +123,8 @@ class ForceController:
             self.error = self.error - 2 * np.pi
         if(self.error < -np.pi):
             self.error = self.error + 2 * np.pi
+            
+        self.error_pub.publish(Float32(self.error))
         
         time = self.time_new - self.time_old
         dt = float(time.secs + (time.nsecs / 1000000000.0))
@@ -161,7 +178,7 @@ class ForceController:
                 control = -np.pi / 2
             if (f_y < 0):
                 control = np.pi / 2
-            
+        
         steering = control * YAW_TO_STEERING_FACTOR + ANGLE_STRAIGHT
         
         if(steering >= MAX_ANGLE_LEFT):
@@ -172,27 +189,27 @@ class ForceController:
             steering = UInt8(int(steering))
         
         # turning circle data for visualization in rviz
-        deg_steering = float(steering.data - 90)
-        self.turning_circle = 2.0 * (WHEELBASE / math.sin(math.radians(deg_steering)))
-        marker = Marker()
-        marker.header.frame_id = "map"
-        marker.type = Marker.CYLINDER
-        marker.action = Marker.ADD
-        marker.pose.position.x = x;
-        marker.pose.position.y = y;
-        marker.pose.position.z = 0;
-        marker.pose.orientation.x = orientation_q.x;
-        marker.pose.orientation.y = orientation_q.y;
-        marker.pose.orientation.z = orientation_q.z;
-        marker.pose.orientation.w = orientation_q.w;
-        marker.scale.x = self.turning_circle;
-        marker.scale.y = self.turning_circle;
-        marker.scale.z = 0.1;
-        marker.color.a = 0.5;
-        marker.color.r = 1.0;
-        marker.color.g = 0.1;
-        marker.color.b = 0.1;
-        self.truning_circle_pub.publish(marker)
+        #~ deg_steering = float(steering.data - 90)
+        #~ self.turning_circle = 2.0 * (WHEELBASE / math.sin(math.radians(deg_steering)))
+        #~ marker = Marker()
+        #~ marker.header.frame_id = "map"
+        #~ marker.type = Marker.CYLINDER
+        #~ marker.action = Marker.ADD
+        #~ marker.pose.position.x = x;
+        #~ marker.pose.position.y = y;
+        #~ marker.pose.position.z = 0;
+        #~ marker.pose.orientation.x = orientation_q.x;
+        #~ marker.pose.orientation.y = orientation_q.y;
+        #~ marker.pose.orientation.z = orientation_q.z;
+        #~ marker.pose.orientation.w = orientation_q.w;
+        #~ marker.scale.x = self.turning_circle;
+        #~ marker.scale.y = self.turning_circle;
+        #~ marker.scale.z = 0.1;
+        #~ marker.color.a = 0.5;
+        #~ marker.color.r = 1.0;
+        #~ marker.color.g = 0.1;
+        #~ marker.color.b = 0.1;
+        #~ self.truning_circle_pub.publish(marker)
         
         self.last_yaw = yaw
         self.time_old = self.time_new
