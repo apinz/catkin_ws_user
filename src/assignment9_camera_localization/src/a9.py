@@ -25,7 +25,8 @@ class CameraLocalization:
         
     def irImageCallback(self, irData):
         print(str(irData))
-        irImage = self.bridge.imgmsg_to_cv2(depthData, "16UC1")
+        irImage = self.bridge.imgmsg_to_cv2(irData, "16UC1")
+        irArray = np.array(irImage, dtype=np.uint16)
         cv2.imwrite("./ir_img.png", irImage)
 
 def main():
