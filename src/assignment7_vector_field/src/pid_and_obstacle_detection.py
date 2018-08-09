@@ -223,7 +223,6 @@ class ForceController:
         self.steeringPush = 0.0
         depthImage = self.bridge.imgmsg_to_cv2(depthData, "16UC1")
         x = np.array(depthImage, dtype=np.uint16)
-        print(str(x))
         # depthArray dimension is [480][640] <==> [Hoehe][Breite]
         counter = 0
         for heightArray in x[START_SEARCH_HEIGHT:END_SEARCH_HEIGHT]:

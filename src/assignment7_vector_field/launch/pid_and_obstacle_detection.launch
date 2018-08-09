@@ -9,5 +9,5 @@
     	<node machine="Steve-7" name="master_sync" pkg="master_sync_fkie" 
         type="master_sync" output="screen">
 	</node>
-    	<node name="pid_and_obstacle_detection" pkg="assignment7_vector_field" type="PID_and_obstacle_detection.py"/>
-</launch> 
+    	<node name="pid_and_obstacle_detection" pkg="assignment7_vector_field" type="pid_and_obstacle_detection.py"/>
+</launch>
