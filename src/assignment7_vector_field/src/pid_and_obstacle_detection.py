@@ -28,7 +28,7 @@ WHEELBASE = 0.28 # 28cm
 KP = 3.6
 KI = 1.8
 KD = 0.1
-SPEED = 350
+SPEED = 375
 
 # MORE INTEGRAL SETTINGS
 ERROR_QUEUE_SIZE = 3
@@ -39,13 +39,13 @@ KI_LOWER_LIMIT = -15
 #THRESHOLD VALUES FROM CAMERA INTO CM DISTANCE FROM THE CAR
 #500 => 30 cm, 700 => 50cm
 
-THRESHOLD = 1000
+THRESHOLD = 1600
 #Um welchen Faktor die Threshold gesenkt werden soll, wenn zu viel gesteert wird 
-STEERING_THRESH_MINIFIER = 0.4
+STEERING_THRESH_MINIFIER = 0
 #Welche Gradtoleranz (+, -) es beim Steering gibt, bis die Threshold vom steering gesenkt wird
-STEERING_TOLERANCE_UNTIL_MINIFY = 40
+STEERING_TOLERANCE_UNTIL_MINIFY = 15
 
-MIN_COUNTER = 400
+MIN_COUNTER = 300
 STEERING_PUSH = .3
 #delay until the next lane swap can occur
 DONT_SWAP_LANE_DELAY = 1400
@@ -67,7 +67,7 @@ class ForceController:
         self.threshold = THRESHOLD
         self.steeringUntilMinifyMax = 90 + STEERING_TOLERANCE_UNTIL_MINIFY
         self.steeringUntilMinifyMin = 90 - STEERING_TOLERANCE_UNTIL_MINIFY
-	
+	self.dont_swap_lane = False
         self.previous_error = 0.0
         self.integral = 0.0
         self.derivative = 0.0        
@@ -106,9 +106,12 @@ class ForceController:
 
     def odometry_callback(self, data):
         self.time_new = rospy.Time.now()
-        
         x = data.pose.pose.position.x
         y = data.pose.pose.position.y
+	if x < 1.75 or x > 3.95:
+	    self.dont_swap_lane = True
+	else:
+	    self.dont_swap_lane = False
         orientation_q = data.pose.pose.orientation
         orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
         (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
@@ -198,13 +201,15 @@ class ForceController:
 		steering = (1 - self.steeringPush) * steering
         
         if(steering >= MAX_ANGLE_LEFT):
+	    steer_int = int(MAX_ANGLE_LEFT)
             steering = UInt8(int(MAX_ANGLE_LEFT))
         elif(steering <= MAX_ANGLE_RIGHT):
+	    steer_int = int(MAX_ANGLE_RIGHT)
             steering = UInt8(int(MAX_ANGLE_RIGHT))
         else:
+	    steer_int = int(steering)
             steering = UInt8(int(steering))
-	#Wenn das Steering eine gewisse Schwelle erreicht, setzen wir unser THRESHOLD runter, damit wenn das Auto in der inneren Lane um die Kurve faehrt, keine Objekte der ausseren Lane erkennt und so in diese hereinfaehrt. Außerdem koennen wir so einen Hoeheren Threshold benutzen um Objekte in der Geraden von weiter aus zu erkennen. 
-	if steering >= steeringUntilMinifyMax or steering <= steeringUntilMinifyMin:
+	if steer_int >= self.steeringUntilMinifyMax or steer_int <= self.steeringUntilMinifyMin:
 	    self.threshold = THRESHOLD * STEERING_THRESH_MINIFIER
 	else:
             self.threshold = THRESHOLD
@@ -221,6 +226,8 @@ class ForceController:
             return
 
         self.steeringPush = 0.0
+	if self.dont_swap_lane:
+	    return
         depthImage = self.bridge.imgmsg_to_cv2(depthData, "16UC1")
         x = np.array(depthImage, dtype=np.uint16)
         # depthArray dimension is [480][640] <==> [Hoehe][Breite]
