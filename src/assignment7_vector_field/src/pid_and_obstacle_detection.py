@@ -108,7 +108,7 @@ class ForceController:
         self.time_new = rospy.Time.now()
         x = data.pose.pose.position.x
         y = data.pose.pose.position.y
-	if x < 1.75 or x > 3.95:
+	if x < 1.8 or x > 4:
 	    self.dont_swap_lane = True
 	else:
 	    self.dont_swap_lane = False
